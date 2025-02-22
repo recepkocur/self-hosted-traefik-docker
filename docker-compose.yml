@@ -1,0 +1,220 @@
+services:
+  proxy:
+    container_name: app-proxy
+    image: traefik:v3.3.3
+    restart: unless-stopped
+    ports:
+      - 80:80
+      - 443:443
+    networks:
+      - proxy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./acme.json:/etc/letsencrypt/acme.json
+    env_file:
+      - .env
+    environment:
+      - CF_API_EMAIL=${CF_API_EMAIL}
+      - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN}
+    command:
+      # ** API ve Kontrol Paneli **:
+
+      # Traefik'in HTTP API'sini ve kontrol panelini etkinleştirir.
+      - --api=true
+
+      # API için hata ayıklama modunu etkinleştirir ve ek hata ayıklama bilgileri sağlar.
+      - --api.debug=true
+
+      # Traefik kontrol panelini kullanıma sunar.
+      - --api.dashboard=true
+
+      # Traefik'in yönetim panelini (dashboard) ve API'sini güvenlik duvarı olmadan, yani "insecure" (güvensiz) modda açar.
+      - --api.insecure=false
+
+      # ** Günlükleme **:
+
+      # Erişim günlüklerini etkinleştirir ve HTTP istekleriyle ilgili bilgileri toplar.
+      - --accesslog=true
+
+      # Erişim günlüklerinin yazılacağı dosya yolunu belirtir.
+      # - --accesslog.filepath=/var/log/access.log
+
+      # Genel günlüklerin yazılacağı dosya yolunu belirtir.
+      # - --log.filepath=/var/log/traefik.log
+
+      # Günlükleme seviyesi olarak INFO'yu ayarlar. INFO, genel çalışma durumu, uyarılar vb. hakkında bilgi çıktısı verir.
+      - --log.level=INFO
+
+      # ** Sağlayıcılar **
+
+      # Docker sağlayıcısını etkinleştirir. Bu, Traefik'in Docker'daki konteynerlardan gelen trafiği yönetmesine izin verir.
+      - --providers.docker=true
+
+      # Docker konteynerlarının bağlanacağı ağın adını belirtir.
+      - --providers.docker.network=proxy
+
+      # ** Kapsayıcıların Varsayılan Olarak Yayınlanmasını Engelleme **:
+
+      # Varsayılan olarak tüm Docker konteynerlarını yayınlamaz, yalnızca explicit olarak belirtilenleri yayınlar.
+      # Bu, istenmeyen trafik yönlendirmelerini engeller.
+      - --providers.docker.exposedByDefault=false
+
+      # ** Giriş Noktaları **:
+
+      # HTTP trafiği (port 80) için bir giriş noktası tanımlar.
+      - --entrypoints.web.address=:80
+
+      # HTTP isteklerini HTTPS trafiği giriş noktasına (websecure) yönlendirir.
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+
+      # HTTP isteklerini HTTPS'ye yönlendirir.
+      - --entryPoints.web.http.redirections.entrypoint.scheme=https
+
+      # HTTPS trafiği (port 443) için bir giriş noktası tanımlar.
+      - --entrypoints.websecure.address=:443
+
+      # HTTP/3 desteğini etkinleştirir, daha hızlı ve güvenli web performansı sağlar.
+      - --entrypoints.websecure.http3
+
+      # Cloudflare ile uyumluluk için:
+      # Set up the TLS configuration for our websecure listener
+      - --entrypoints.websecure.http.tls=true
+      - --entrypoints.websecure.http.tls.certResolver=letsencrypt
+      - --entrypoints.websecure.http.tls.domains[0].main=${APP_HOST}
+
+      # ** Sertifika Çözücüler **:
+
+      # Cloudflare ile uyumluluk için:
+      - --certificatesresolvers.letsencrypt.acme.dnschallenge=true
+      - --certificatesresolvers.letsencrypt.acme.dnschallenge.provider=cloudflare
+      - --certificatesresolvers.letsencrypt.acme.dnschallenge.resolvers=1.1.1.1:53,8.8.8.8:53
+      - --certificatesresolvers.letsencrypt.acme.dnschallenge.delaybeforecheck=20
+      - --certificatesresolvers.letsencrypt.acme.dnschallenge.disablepropagationcheck=true
+
+      # Yada diğer DNS provider ile uyumluluk için:
+      # TLS-ALPN-01 zorluk tipini kullanarak ACME doğrulamasını gerçekleştirir.
+      # - --certificatesresolvers.letsencrypt.acme.tlschallenge=true
+
+      # ACME protokolü kullanarak TLS sertifikalarını yönetmek için kullanacağı e-posta adresini belirtir.
+      - --certificatesresolvers.letsencrypt.acme.email=${CF_API_EMAIL}
+
+      # Sertifika ve anahtarların depolanacağı dosyanın yolunu belirtir.
+      - --certificatesresolvers.letsencrypt.acme.storage=/etc/letsencrypt/acme.json
+
+      # Test için kontrol etmek için:
+      # - --certificatesresolvers.letsencrypt.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory
+
+      # (Traefik v1 için geçerli) Güvenli giriş noktasını (HTTPS) varsayılan olarak ayarlar.
+      - --entrypoints.websecure.asDefault=true
+
+      # Güvenli bağlantılar için sertifika çözücü olarak `letsencrypt` kullanılır.
+      - --entrypoints.websecure.http.tls.certresolver=letsencrypt
+
+    # Bu yapılandırma, Traefik'i HTTPS ile güvenli bir şekilde çalışacak,
+    # trafik günlüklerini yönetecek ve Traefik kontrol panelini belirli bir etki alanında sunacak şekilde yapılandırır.
+    # Ayrıca, Docker hizmetlerini yönlendirmek için bir sağlayıcı olarak kullanır ve otomatik olarak TLS sertifikalarını yönetir.
+    labels:
+      # Traefik'e, ilgili Docker konteynerını veya hizmetini izleyip yönetmesi gerektiğini söyler.
+      - traefik.enable=true
+
+      # ** Dashboard **
+
+      # Bu kural, ana bilgisayar adını kullanan istekleri bu router (yönlendirici) ile eşleştirir.
+      # Traefik, bu isteklere belirttiği hizmeti yönlendirir.
+      - traefik.http.routers.dashboard.rule=Host(`${APP_HOST}`)
+
+      # Bu, router'ın hangi giriş noktasını kullanacağını belirtir.
+      # `websecure` genellikle HTTPS trafiği için tanımlanmış bir giriş noktasıdır, dolayısıyla bu kural HTTPS üzerinden erişim belirtiyor.
+      - traefik.http.routers.dashboard.entrypoints=websecure
+
+      # Traefik'in içsel API servisini kullanır.
+      # Bu, Traefik'te yerleşik olan yönetim ve kontrol paneli gibi araçları içerir.
+      - traefik.http.routers.dashboard.service=api@internal
+
+      # Trafik TLS (Transport Layer Security) kullanılarak şifrelenmesini sağlar, yani HTTP istekleri HTTPS olarak sunulur.
+      - traefik.http.routers.dashboard.tls=true
+
+      # TLS sertifikalarını almak ve yenilemek için kullanılacak sertifika çözücüsünü tanımlar.
+      # `letsencrypt` adlı bir çözümcü burada belirtilmiş.
+      - traefik.http.routers.dashboard.tls.certresolver=letsencrypt
+
+      # `dashboard` adlı bir middleware kullanılması belirtiliyor.
+      # Bu, isteklere route edilmeden önce belirli işlemleri gerçekleştirebilir.
+      - traefik.http.routers.dashboard.middlewares=auth
+
+      # Basic authentication ile koruma sağlar ve `recep` adındaki kullanıcı için SHA-encoded bir parola belirler. Bu, Traefik kontrol paneline erişimi koruma altına alarak yetkisiz erişimi önler.
+      - traefik.http.middlewares.auth.basicauth.users=${APP_AUTH}
+
+      # # Rate Limiting Middleware tanımı
+      # - traefik.http.middlewares.api-ratelimit.ratelimit.average=100
+      # - traefik.http.middlewares.api-ratelimit.ratelimit.burst=50
+      # - traefik.http.middlewares.api-ratelimit.ratelimit.period=1m
+
+      # # Rate Limiting'i router'lara uygulama
+      # - traefik.http.routers.auth.middlewares=api-ratelimit
+      # - traefik.http.routers.rest.middlewares=api-ratelimit
+      # - traefik.http.routers.realtime.middlewares=api-ratelimit
+
+      # # Auth servisi için daha sıkı limit
+      # - traefik.http.middlewares.auth-ratelimit.ratelimit.average=20
+      # - traefik.http.middlewares.auth-ratelimit.ratelimit.burst=5
+      # - traefik.http.middlewares.auth-ratelimit.ratelimit.period=1m
+      # - traefik.http.routers.auth.middlewares=auth-ratelimit
+
+      # # REST API için daha yüksek limit
+      # - traefik.http.middlewares.rest-ratelimit.ratelimit.average=200
+      # - traefik.http.middlewares.rest-ratelimit.ratelimit.burst=100
+      # - traefik.http.middlewares.rest-ratelimit.ratelimit.period=1m
+      # - traefik.http.routers.rest.middlewares=rest-ratelimit
+
+      # # IP Whitelist middleware
+      # - traefik.http.middlewares.ip-whitelist.ipwhitelist.sourcerange=82.112.241.178,127.0.0.1
+
+      # # Özel hata sayfası
+      # - traefik.http.middlewares.ratelimit-error.errors.status=429
+      # - traefik.http.middlewares.ratelimit-error.errors.service=error-service
+      # - traefik.http.middlewares.ratelimit-error.errors.query=/rate-limit-error
+
+      # kocur.app adresi cloudflare arkasına yapılan yapılandırma aktiftir.
+      # Bunun için Security Middleware'i kapattım.
+      # Sadece cloudflare dışında DNS provider ile uyumluluk için:
+
+      # ** Security Middleware **
+
+      # HTTP Strict Transport Security (HSTS) başlığının alt alan adlarına (subdomain) da uygulanmasını sağlar.
+
+      # Bu, tüm etki alanı ve alt alan adlarının HTTPS üzerinden sunulmasını zorunlu kılar.
+      # - traefik.http.middlewares.hsts.headers.stsincludesubdomains=true
+
+      # HSTS preload listesine dahil edilmeyi sağlar.
+      # Tarayıcıların önceden yüklendiği bu listeye dahil olmak, bir sitenin HTTPS üzerinden yüklenmesini zorunlu hale getirir.
+      # - traefik.http.middlewares.hsts.headers.stspreload=true
+
+      # HSTS başlığının tarayıcıda ne kadar süre geçerli olacağını belirtir (burada yaklaşık 1 yıl).
+      # Bu süre boyunca, tarayıcı yalnızca HTTPS üzerinden bağlantı kuracaktır.
+      # - traefik.http.middlewares.hsts.headers.stsseconds=31536000
+
+      # İstemciden gelen istekte başka bir `Strict-Transport-Security` başlığı olsa bile ters proxy üzerinden bu başlığı zorlar.
+      # - traefik.http.middlewares.hsts.headers.forcestsheader=true
+
+      # `X-Frame-Options` başlığını ayarlar. `sameorigin` değeri, içeriğin yalnızca aynı alan adından gelen taleplerle çerçeve içinde
+      # gösterilebileceğini belirtir ve clickjacking saldırılarını önlemeye yardımcı olur.
+      # - traefik.http.middlewares.hsts.headers.customframeoptionsvalue=sameorigin
+
+      # `X-XSS-Protection` başlığını etkinleştirir, modern tarayıcıların bazı türlerde XSS (Cross Site Scripting)
+      # saldırılarına karşı bir koruma mekanizması sağlamasına olanak tanır.
+      # - traefik.http.middlewares.hsts.headers.browserxssfilter=true
+
+      # HTTP isteklerini otomatik olarak HTTPS isteklerine yönlendirir.
+      # Bu, uygulamanın yalnızca güvenli bağlantılarla kullanılmasını teşvik eder.
+      # - traefik.http.middlewares.hsts.headers.sslredirect=true
+
+      # `X-Content-Type-Options` başlığını `nosniff` olarak ayarlar.
+      # Bu, tarayıcıların MIME türü denetim mekanizmalarını atlamasını engeller ve bazı tür MIME tipi saldırılarına karşı koruma sağlar.
+      # - traefik.http.middlewares.hsts.headers.contenttypenosniff=true
+
+networks:
+  proxy:
+    driver: bridge
+    external: true
+    name: proxy
