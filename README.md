@@ -67,6 +67,22 @@ Proje birden fazla güvenlik katmanı içerir:
 - Docker Compose v2.20+
 - Make
 
+# CI/CD
+
+Proje, GitHub Actions ile otomatik deployment sürecine sahiptir. Master branch'e yapılan her push işleminden sonra:
+
+- VPS sunucuya otomatik deployment yapılır
+- Docker servisleri yeniden başlatılır
+- Eski Docker image'ları temizlenir
+
+Deployment için gerekli secret'lar:
+
+- SSH_PRIVATE_KEY
+- SSH_PORT
+- SSH_HOST
+- SSH_USERNAME
+- SSH_PATH
+
 ## Lisans
 
 MIT
