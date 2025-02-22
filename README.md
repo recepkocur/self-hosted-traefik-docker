@@ -25,6 +25,8 @@ Bu Docker projesi, modern bir ters proxy ve yük dengeleyici olarak Traefik'i ku
 - **Yük Dengeleme:** Gelen trafiğin çoklu servisler arasında verimli dağıtımı
 - **Kolay Bakım:** Docker konteynerleri aracılığıyla çoklu servislerin basit konfigürasyonu ve yönetimi
 
+![Örnek](traefik-admin.png)
+
 ## Güvenlik Özellikleri
 
 Proje birden fazla güvenlik katmanı içerir:
