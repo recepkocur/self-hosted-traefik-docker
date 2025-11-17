@@ -1,7 +1,7 @@
 services:
   proxy:
     container_name: app-proxy
-    image: traefik:v3.3.3
+    image: traefik:v3.6.1
     restart: unless-stopped
     ports:
       - 80:80
