@@ -39,3 +39,9 @@ ps:
 fix:
 	chmod 600 acme.json
 	docker network create --driver bridge proxy
+
+# GitHub'a Push
+push:
+	git add .
+	git commit -m "Update: $$(date '+%Y.%m.%d %H:%M:%S')"
+	git push
