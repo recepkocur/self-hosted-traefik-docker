@@ -1,6 +1,6 @@
 services:
   proxy:
-    container_name: app-proxy
+    container_name: traefik
     image: traefik:v3.6.1
     restart: unless-stopped
     ports:
